@@ -17,12 +17,14 @@ boxsize = 1000.
 mas_order = 2
 multipole_axis = 0
 field = jax.random.normal(jax.random.PRNGKey(2),(res,)*dim, dtype=jnp.float32).astype(jnp.float64 if jax.config.jax_enable_x64 else jnp.float32) # jnp.float32 to make sure that the random field is the same in single and double precision modes
+field_b = jax.random.normal(jax.random.PRNGKey(3),(res,)*dim, dtype=jnp.float32).astype(jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
 bin_edges = jnp.arange(1,res//3+1)
 B_info = BFast.get_triangles(bin_edges, open_triangles=True)
 
 ref_triangles_onlyclosed = jnp.load(f"tests/reference_data/triangles_res{res}_onlyclosed.npz")
 ref_triangles_openclosed = jnp.load(f"tests/reference_data/triangles_res{res}_openclosed.npz")
 ref_Pk = jnp.load(f"tests/reference_data/Pk_dim{dim}_res{res}_mas{mas_order}_multipole{multipole_axis}.npz")
+ref_Pk_cross = jnp.load(f"tests/reference_data/Pk_cross_dim{dim}_res{res}_mas{mas_order}_multipole{multipole_axis}.npz")
 ref_Bk_norm = jnp.load(f"tests/reference_data/Bk_norm_PB_dim{dim}_res{res}_openclosed.npz")
 ref_Bk_meas = jnp.load(f"tests/reference_data/Bk_measured_PB_dim{dim}_res{res}_mas{mas_order}_openclosed.npz")
 
@@ -36,6 +38,14 @@ def test_Pk(jit, sharded):
     assert jnp.allclose(result['Pk0'], ref_Pk['Pk0'])
     assert jnp.allclose(result['Pk2'], ref_Pk['Pk2'])
     assert jnp.allclose(result['Pk4'], ref_Pk['Pk4'])
+
+@pytest.mark.parametrize("jit", [True, False])
+@pytest.mark.parametrize("sharded", [True, False])
+def test_Pk_cross(jit, sharded):
+    bin_edges = jnp.arange(1,res//2+1)
+    result = BFast.Pk_cross(field, field_b, boxsize, bin_edges, mas_order=mas_order, multipole_axis=multipole_axis, jit=jit, sharded=sharded)
+    assert jnp.allclose(result['Pxy0'], ref_Pk_cross['Pxy0'])
+    assert jnp.allclose(result['r'], ref_Pk_cross['r'])
 
 def test_Bk_triangles_onlyclosed():
     B_info = BFast.get_triangles(bin_edges, open_triangles=False)

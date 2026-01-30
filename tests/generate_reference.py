@@ -14,6 +14,7 @@ def main(dim, res, boxsize, mas_order, multipole_axis, slow=False, save=False):
     print("MAS kernel order:", mas_order)
     print("Pk multipole axis:", multipole_axis)
     field = jax.random.normal(jax.random.PRNGKey(2),(res,)*dim, dtype=jnp.float32).astype(jnp.float64 if jax.config.jax_enable_x64 else jnp.float32) # jnp.float32 to make sure that the random field is the same in single and double precision modes
+    field_b = jax.random.normal(jax.random.PRNGKey(3),(res,)*dim, dtype=jnp.float32).astype(jnp.float64 if jax.config.jax_enable_x64 else jnp.float32)
     bin_edges = jnp.arange(1,res//2+1)
     result_Pk = BFast.powerspectrum(field, boxsize, bin_edges, mas_order=mas_order, multipole_axis=multipole_axis, sharding=None)
     print("k:", result_Pk['k'])
@@ -22,6 +23,10 @@ def main(dim, res, boxsize, mas_order, multipole_axis, slow=False, save=False):
     print("Pk2:", result_Pk['Pk2'])
     print("Pk4:", result_Pk['Pk4'], end='\n\n')
     if save: jnp.savez(f'reference_data/Pk_dim{dim}_res{res}_mas{mas_order}_multipole{multipole_axis}', **result_Pk)
+    result_Pxy = BFast.Pk_cross(field, field_b, boxsize, bin_edges, mas_order=mas_order, multipole_axis=multipole_axis, jit=False, sharded=False)
+    print("Pxy0:", result_Pxy['Pxy0'])
+    print("r:", result_Pxy['r'], end='\n\n')
+    if save: jnp.savez(f'reference_data/Pk_cross_dim{dim}_res{res}_mas{mas_order}_multipole{multipole_axis}', **result_Pxy)
 
     bin_edges = jnp.arange(1,res//3+1)
     print("Number of bins:", bin_edges.shape[0] -1)
