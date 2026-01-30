@@ -6,7 +6,7 @@ import pytest
 from jax import NamedSharding, P
 from pytest_jax_bench import JaxBench
 
-from BFast.core.powerspectrum import powerspectrum
+from BFast.core.powerspectrum import powerspectrum, crosspowerspectrum
 from BFast.core.bispectrum import get_triangles, bispectrum
 from shared_test_setup import shared_test_setup
 from BFast.core.utils import shard_3D_array
@@ -40,6 +40,34 @@ def test_powerspectrum_sharded_bench(request, sharded):
 
     jb = JaxBench(request, jit_rounds=5, jit_warmup=1, eager_rounds=0, eager_warmup=0)
     jb.measure(fn=bench_func, fn_jit=jitted_bench, field=field, boxsize=boxsize, sharding=field.sharding)
+
+@pytest.mark.parametrize("sharded", [False, True])
+def test_crosspowerspectrum_sharded_bench(request, sharded):
+    dim = 3
+    res = 64
+    boxsize = 1000.
+    mas_order = 2
+    multipole_axis = 0
+
+    field_a = jax.random.normal(jax.random.PRNGKey(2), (res,) * dim)
+    field_b = jax.random.normal(jax.random.PRNGKey(3), (res,) * dim)
+    # input is 2MB (with double precision)
+    if sharded:
+        field_a = shard_3D_array(field_a)
+        field_b = shard_3D_array(field_b)
+    bin_edges = jnp.arange(1, res // 2 + 1)
+
+    def bench_func(field_a, field_b, boxsize, sharding):
+        return crosspowerspectrum(field_a, field_b, boxsize, bin_edges, mas_order=mas_order, multipole_axis=multipole_axis, sharding=sharding)
+
+    jitted_bench = jax.jit(bench_func, static_argnames=["boxsize", "sharding"])
+
+    comp = jitted_bench.lower(field_a, field_b, boxsize, field_a.sharding).compile()
+    hlo = comp.as_text()
+    assert "all-gather" not in hlo
+
+    jb = JaxBench(request, jit_rounds=5, jit_warmup=1, eager_rounds=0, eager_warmup=0)
+    jb.measure(fn=bench_func, fn_jit=jitted_bench, field_a=field_a, field_b=field_b, boxsize=boxsize, sharding=field_a.sharding)
 
 @pytest.mark.parametrize("sharded", [False, True])
 def test_bispectrum_sharded_bench(request, sharded):
